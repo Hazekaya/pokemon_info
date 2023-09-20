@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
-
+    <EditTextPreference
+        android:defaultValue="15"
+        android:key="widget_update_minutes"
+        android:title="Widget Update Interval in minutes.\nMinium value is 15 minutes" />
 </PreferenceScreen>

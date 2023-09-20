@@ -1,3 +1,4 @@
+// PokemonWidgetProvider.kt
 package com.hazekaya.pokemon_widget
 
 import android.app.PendingIntent
@@ -7,11 +8,13 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import android.widget.RemoteViews
+import androidx.preference.PreferenceManager
+import androidx.work.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
-import kotlin.Exception
-import java.util.Random
+import java.util.concurrent.TimeUnit
 
 class PokemonWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
@@ -23,56 +26,27 @@ class PokemonWidgetProvider : AppWidgetProvider() {
             val pendingIntent: PendingIntent = PendingIntent.getActivity(
                 context,
                 0,
-                Intent(context, MainActivity::class.java),
+                Intent(context, WidgetActivity::class.java),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            val views: RemoteViews = RemoteViews(
-                context.packageName,
-                R.layout.activity_main // Use the correct layout resource for your widget
-            ).apply {
-//                setOnClickPendingIntent(R.id.your_button_id, pendingIntent) // Configure the button or UI element
-            }
-
-            val pokemonApiClient = ApiClient().createRetroFitInstance()
-
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    val call = pokemonApiClient.getAllPokemon();
-                    val response = call.execute()
-                    var pokemonArr: List<PokemonModel>? = null
-                    var pokemon: PokemonModel? = null
-                    var count: Int = 0;
-
-                    if (response.isSuccessful) {
-                        pokemonArr = response.body()?.results
-                    } else {
-                    }
-
-                    if (pokemonArr != null) {
-                        count = pokemonArr.size
-                        val randomPokemon: PokemonModel = pokemonArr[Random().nextInt(count) + 1]
-                        val randomPokemonCall =
-                            pokemonApiClient.getPokemonByName(randomPokemon.name.toString())
-                        val randomPokemonResponse = randomPokemonCall.execute()
-
-                        if (randomPokemonResponse.isSuccessful) {
-                            pokemon = randomPokemonResponse.body()
-                        }
-                    }
+                    val pokemon = getRandomPokemon()
 
                     updateWidgetContent(
                         context,
                         appWidgetManager,
                         appWidgetId,
                         pokemon
-
                     )
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
             }
         }
+
+        scheduleWidgetUpdateWork(context)
     }
 
     private fun updateWidgetContent(
@@ -87,18 +61,75 @@ class PokemonWidgetProvider : AppWidgetProvider() {
                 "drawable",
                 context.packageName
             )
-        val view = RemoteViews(context.packageName, R.layout.activity_main)
+        val view = RemoteViews(context.packageName, R.layout.widget_layout)
         view.setTextViewText(R.id.widget_text_view, pokemon?.name)
+
         view.setImageViewResource(R.id.pokemon_image_view, resourceId)
         // Update the widget
         appWidgetManager.updateAppWidget(appWidgetId, view)
     }
 
-    private fun getRandomPokemon() {
+    private suspend fun getRandomPokemon(): PokemonModel? {
+        return try {
+            val pokemonApiClient = ApiClient().createRetroFitInstance()
 
+            val randomPokemon = CoroutineScope(Dispatchers.IO).async {
+                val call = pokemonApiClient.getAllPokemon()
+                val response = call.execute()
+                var pokemonArr: List<PokemonModel>? = null
+
+                if (response.isSuccessful) {
+                    pokemonArr = response.body()?.results
+                }
+
+                if (pokemonArr != null) {
+                    val count = pokemonArr.size
+                    val randomIndex = (0 until count).random()
+                    val randomPokemonName = pokemonArr[randomIndex].name ?: ""
+                    val randomPokemonCall =
+                        pokemonApiClient.getPokemonByName(randomPokemonName)
+                    val randomPokemonResponse = randomPokemonCall.execute()
+
+                    if (randomPokemonResponse.isSuccessful) {
+                        randomPokemonResponse.body()
+                    } else {
+                        null
+                    }
+                } else {
+                    null
+                }
+            }
+
+            randomPokemon.await() // Wait for the result of the async coroutine
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null // Handle the exception and return null or handle the error as needed
+        }
     }
 
-    private fun getAllPokemon(): List<PokemonModel>? {
-        return null;
+    private fun scheduleWidgetUpdateWork(context: Context) {
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+        val name = sharedPreferences.getString("widget_update_minutes", "")
+
+        val duration: Long = name?.toLong() ?: 15
+
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        Log.d("update duration", duration.toString())
+
+        val periodicWorkRequest = PeriodicWorkRequestBuilder<PokemonWidgetWorker>(
+            duration,
+            TimeUnit.MINUTES
+        )
+            .setConstraints(constraints)
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "widgetUpdateWork",
+            ExistingPeriodicWorkPolicy.UPDATE,
+            periodicWorkRequest
+        )
     }
 }
