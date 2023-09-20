@@ -10,8 +10,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:padding="30dp"
-        android:text="Hello, Widget!"
+        android:text="@string/widget_placeholder_string"
         android:textAlignment="center"
+        android:textColor="@color/white"
         android:textSize="32sp"
         android:textStyle="bold" />
 

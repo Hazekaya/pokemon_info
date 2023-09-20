@@ -63,9 +63,9 @@ class PokemonWidgetProvider : AppWidgetProvider() {
             )
         val view = RemoteViews(context.packageName, R.layout.widget_layout)
         view.setTextViewText(R.id.widget_text_view, pokemon?.name)
+        // Update the widget
 
         view.setImageViewResource(R.id.pokemon_image_view, resourceId)
-        // Update the widget
         appWidgetManager.updateAppWidget(appWidgetId, view)
     }
 
