@@ -5,6 +5,7 @@
     android:initialLayout="@layout/widget_loading"
     android:minWidth="40dp"
     android:minHeight="40dp"
+    android:previewImage="@drawable/pokemon_25"
     android:previewLayout="@layout/widget_loading"
     android:resizeMode="horizontal|vertical"
     android:targetCellWidth="3"
